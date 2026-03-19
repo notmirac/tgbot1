@@ -1,0 +1,8 @@
+Если у тебя в handlers/__init__.py есть строка вида:
+
+from . import chat_18, photos_18, start, payments, profile, admin
+
+то photos_18 уже подключится сам после того, как ты положишь handlers/photos_18.py.
+
+Если register_all_handlers() сделан вручную — подключи router из handlers/photos_18.py там же,
+где подключаются остальные routers.
