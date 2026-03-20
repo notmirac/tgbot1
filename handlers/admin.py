@@ -7,7 +7,10 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import (
+    Message, CallbackQuery,
+    InlineKeyboardMarkup, InlineKeyboardButton,
+)
 
 from database import (
     add_subscription, get_subscription_expires,
@@ -23,47 +26,83 @@ router = Router()
 
 OWNER_ID = config.admin_id
 
+
 def is_owner(user_id: int) -> bool:
     return user_id == OWNER_ID
 
+
+# ══════════════════════════════════════════════════════════════
+#  FSM
+# ══════════════════════════════════════════════════════════════
+
 class AdminStates(StatesGroup):
     waiting_give_username = State()
-    waiting_give_days = State()
-    waiting_revoke = State()
-    waiting_check = State()
-    waiting_ban_username = State()
-    waiting_ban_reason = State()
-    waiting_unban = State()
+    waiting_give_days     = State()
+    waiting_revoke        = State()
+    waiting_check         = State()
+    waiting_ban_username  = State()
+    waiting_ban_reason    = State()
+    waiting_unban         = State()
+    # ── Ответ пользователю ──
+    waiting_reply_text    = State()
+
+
+# ══════════════════════════════════════════════════════════════
+#  КЛАВИАТУРЫ
+# ══════════════════════════════════════════════════════════════
 
 def admin_main_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📊 Статистика", callback_data="adm_stats")],
-        [InlineKeyboardButton(text="💳 Подписки", callback_data="adm_subs")],
-        [InlineKeyboardButton(text="🔒 Баны", callback_data="adm_bans")],
+        [InlineKeyboardButton(text="📊 Статистика",   callback_data="adm_stats")],
+        [InlineKeyboardButton(text="💳 Подписки",     callback_data="adm_subs")],
+        [InlineKeyboardButton(text="🔒 Баны",         callback_data="adm_bans")],
         [InlineKeyboardButton(text="🚫 Список банов", callback_data="adm_banlist")],
-        [InlineKeyboardButton(text="📋 Логи", callback_data="adm_logs")],
+        [InlineKeyboardButton(text="📋 Логи",         callback_data="adm_logs")],
     ])
+
 
 def subs_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Выдать подписку", callback_data="adm_give")],
+        [InlineKeyboardButton(text="✅ Выдать подписку",  callback_data="adm_give")],
         [InlineKeyboardButton(text="❌ Забрать подписку", callback_data="adm_revoke")],
-        [InlineKeyboardButton(text="🔍 Проверить", callback_data="adm_check")],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="adm_back")],
+        [InlineKeyboardButton(text="🔍 Проверить",        callback_data="adm_check")],
+        [InlineKeyboardButton(text="◀️ Назад",            callback_data="adm_back")],
     ])
+
 
 def bans_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🚫 Забанить", callback_data="adm_ban")],
+        [InlineKeyboardButton(text="🚫 Забанить",  callback_data="adm_ban")],
         [InlineKeyboardButton(text="✅ Разбанить", callback_data="adm_unban")],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="adm_back")],
+        [InlineKeyboardButton(text="◀️ Назад",     callback_data="adm_back")],
     ])
 
+
 def back_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад в меню", callback_data="adm_back")]])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="adm_back")]
+    ])
+
 
 def cancel_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="adm_cancel")]])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="adm_cancel")]
+    ])
+
+
+def reply_kb(user_id: int) -> InlineKeyboardMarkup:
+    """Кнопка «Ответить» под сообщением от пользователя."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="✉️ Ответить",
+            callback_data=f"adm_reply:{user_id}",
+        )]
+    ])
+
+
+# ══════════════════════════════════════════════════════════════
+#  ВСПОМОГАТЕЛЬНЫЕ
+# ══════════════════════════════════════════════════════════════
 
 async def resolve_user_safe(username_input: str) -> tuple[Optional[dict], str]:
     clean = (username_input or "").strip().lstrip("@")
@@ -76,9 +115,10 @@ async def resolve_user_safe(username_input: str) -> tuple[Optional[dict], str]:
         return None, f"❌ Пользователь @{clean} не найден.\n\nПользователь должен сначала написать боту /start"
     return user, ""
 
+
 async def _show_main_menu(target: Message | CallbackQuery) -> None:
     text = "⚙️ <b>Админ-панель</b>\n\n👑 Добро пожаловать, владелец!"
-    kb = admin_main_kb()
+    kb   = admin_main_kb()
     if isinstance(target, CallbackQuery):
         try:
             await target.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
@@ -88,12 +128,18 @@ async def _show_main_menu(target: Message | CallbackQuery) -> None:
     else:
         await target.answer(text, reply_markup=kb, parse_mode="HTML")
 
+
+# ══════════════════════════════════════════════════════════════
+#  ВХОД / НАВИГАЦИЯ
+# ══════════════════════════════════════════════════════════════
+
 @router.message(Command("owner"))
 async def cmd_owner(message: Message, state: FSMContext) -> None:
     if not is_owner(message.from_user.id):
         return
     await state.clear()
     await _show_main_menu(message)
+
 
 @router.callback_query(F.data == "adm_back")
 async def adm_back(call: CallbackQuery, state: FSMContext) -> None:
@@ -103,6 +149,7 @@ async def adm_back(call: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await _show_main_menu(call)
 
+
 @router.callback_query(F.data == "adm_cancel")
 async def adm_cancel(call: CallbackQuery, state: FSMContext) -> None:
     if not is_owner(call.from_user.id):
@@ -111,6 +158,94 @@ async def adm_cancel(call: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await _show_main_menu(call)
 
+
+# ══════════════════════════════════════════════════════════════
+#  ОТВЕТ ПОЛЬЗОВАТЕЛЮ
+#  Логика:
+#  1. Пользователь пишет в поддержку → start.py отправляет
+#     сообщение админу с кнопкой «Ответить» (reply_kb)
+#  2. Админ нажимает кнопку → сохраняем user_id в FSM
+#     → переходим в AdminStates.waiting_reply_text
+#  3. Админ пишет текст → отправляем пользователю
+#     от имени «Администрация» без данных админа
+# ══════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data.startswith("adm_reply:"))
+async def adm_reply_start(call: CallbackQuery, state: FSMContext) -> None:
+    """Нажата кнопка «Ответить» — запрашиваем текст ответа."""
+    if not is_owner(call.from_user.id):
+        await call.answer("Нет доступа.", show_alert=True)
+        return
+
+    # Извлекаем user_id из callback_data
+    try:
+        target_user_id = int(call.data.split(":")[1])
+    except (IndexError, ValueError):
+        await call.answer("Ошибка: неверный ID.", show_alert=True)
+        return
+
+    await call.answer()
+    await state.update_data(reply_target_id=target_user_id)
+    await state.set_state(AdminStates.waiting_reply_text)
+
+    await call.message.answer(
+        f"✉️ <b>Ответ пользователю</b> (ID: <code>{target_user_id}</code>)\n\n"
+        "Напиши текст ответа.\nПользователь увидит его как сообщение от администрации.\n\n"
+        "<i>Для отмены нажми кнопку ниже.</i>",
+        reply_markup=cancel_kb(),
+        parse_mode="HTML",
+    )
+
+
+@router.message(AdminStates.waiting_reply_text)
+async def adm_reply_send(message: Message, state: FSMContext) -> None:
+    """Отправить ответ пользователю. Данные админа скрыты."""
+    if not is_owner(message.from_user.id):
+        return
+
+    text = (message.text or "").strip()
+    if not text:
+        await message.answer("⚠️ Напиши текст ответа:", reply_markup=cancel_kb())
+        return
+
+    data          = await state.get_data()
+    target_id     = data.get("reply_target_id")
+
+    if not target_id:
+        await state.clear()
+        await message.answer("⚠️ Ошибка: ID пользователя не найден.", reply_markup=admin_main_kb())
+        return
+
+    # Отправляем пользователю — только текст, без данных админа
+    try:
+        await message.bot.send_message(
+            target_id,
+            f"📩 <b>Ответ администрации:</b>\n\n{text}",
+            parse_mode="HTML",
+        )
+        await state.clear()
+        await message.answer(
+            f"✅ Ответ отправлен пользователю <code>{target_id}</code>.",
+            reply_markup=admin_main_kb(),
+            parse_mode="HTML",
+        )
+        logger.info("Admin replied to user %d", target_id)
+
+    except Exception as exc:
+        logger.error("Failed to send reply to user %d: %s", target_id, exc)
+        await state.clear()
+        await message.answer(
+            f"❌ Не удалось отправить ответ.\n"
+            f"Пользователь мог заблокировать бота.\n\n<code>{exc}</code>",
+            reply_markup=admin_main_kb(),
+            parse_mode="HTML",
+        )
+
+
+# ══════════════════════════════════════════════════════════════
+#  СТАТИСТИКА
+# ══════════════════════════════════════════════════════════════
+
 @router.callback_query(F.data == "adm_stats")
 async def adm_stats(call: CallbackQuery) -> None:
     if not is_owner(call.from_user.id):
@@ -118,7 +253,9 @@ async def adm_stats(call: CallbackQuery) -> None:
         return
     await call.answer()
     s = await get_stats()
-    countries_text = "".join(f"  {c} — {n} чел.\n" for c, n in s["countries"][:10]) or "  Нет данных\n"
+    countries_text = "".join(
+        f"  {c} — {n} чел.\n" for c, n in s["countries"][:10]
+    ) or "  Нет данных\n"
     text = (
         "📊 <b>Статистика бота</b>\n\n"
         "👥 <b>Пользователи:</b>\n"
@@ -135,13 +272,22 @@ async def adm_stats(call: CallbackQuery) -> None:
     )
     await call.message.edit_text(text, reply_markup=back_kb(), parse_mode="HTML")
 
+
+# ══════════════════════════════════════════════════════════════
+#  ПОДПИСКИ
+# ══════════════════════════════════════════════════════════════
+
 @router.callback_query(F.data == "adm_subs")
 async def adm_subs(call: CallbackQuery) -> None:
     if not is_owner(call.from_user.id):
         await call.answer()
         return
     await call.answer()
-    await call.message.edit_text("💳 <b>Управление подписками</b>", reply_markup=subs_kb(), parse_mode="HTML")
+    await call.message.edit_text(
+        "💳 <b>Управление подписками</b>",
+        reply_markup=subs_kb(), parse_mode="HTML",
+    )
+
 
 @router.callback_query(F.data == "adm_give")
 async def adm_give_start(call: CallbackQuery, state: FSMContext) -> None:
@@ -154,6 +300,7 @@ async def adm_give_start(call: CallbackQuery, state: FSMContext) -> None:
         "✅ <b>Выдать подписку</b>\n\nВведи @username пользователя:\n<i>Пример: @username или username</i>",
         reply_markup=cancel_kb(), parse_mode="HTML",
     )
+
 
 @router.message(AdminStates.waiting_give_username)
 async def adm_give_username(message: Message, state: FSMContext) -> None:
@@ -171,6 +318,7 @@ async def adm_give_username(message: Message, state: FSMContext) -> None:
         reply_markup=cancel_kb(), parse_mode="HTML",
     )
 
+
 @router.message(AdminStates.waiting_give_days)
 async def adm_give_days(message: Message, state: FSMContext) -> None:
     if not is_owner(message.from_user.id):
@@ -182,18 +330,27 @@ async def adm_give_days(message: Message, state: FSMContext) -> None:
     except ValueError:
         await message.answer("⚠️ Введи число дней (например: 30):", reply_markup=cancel_kb())
         return
-    data = await state.get_data()
-    target_id = data["target_id"]
+    data         = await state.get_data()
+    target_id    = data["target_id"]
     target_label = data["target_label"]
     await add_subscription(target_id, "manual_admin", 0, "RUB", days, message.from_user.id)
     await add_admin_log(message.from_user.id, "give_subscription", target_id, target_label, f"{days} дней")
-    expires = await get_subscription_expires(target_id)
+    expires     = await get_subscription_expires(target_id)
     expires_str = expires.strftime("%d.%m.%Y") if expires else "—"
     await state.clear()
     await message.answer(
         f"✅ <b>Подписка выдана!</b>\n👤 {target_label}\n📅 Действует до: <b>{expires_str}</b>",
         reply_markup=admin_main_kb(), parse_mode="HTML",
     )
+    try:
+        await message.bot.send_message(
+            target_id,
+            f"🎉 Тебе выдан доступ на <b>{days} дней</b>!\n📅 До: <b>{expires_str}</b>",
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
 
 @router.callback_query(F.data == "adm_revoke")
 async def adm_revoke_start(call: CallbackQuery, state: FSMContext) -> None:
@@ -202,7 +359,11 @@ async def adm_revoke_start(call: CallbackQuery, state: FSMContext) -> None:
         return
     await call.answer()
     await state.set_state(AdminStates.waiting_revoke)
-    await call.message.edit_text("❌ <b>Забрать подписку</b>\n\nВведи @username:", reply_markup=cancel_kb(), parse_mode="HTML")
+    await call.message.edit_text(
+        "❌ <b>Забрать подписку</b>\n\nВведи @username:",
+        reply_markup=cancel_kb(), parse_mode="HTML",
+    )
+
 
 @router.message(AdminStates.waiting_revoke)
 async def adm_revoke_do(message: Message, state: FSMContext) -> None:
@@ -216,7 +377,11 @@ async def adm_revoke_do(message: Message, state: FSMContext) -> None:
     await revoke_subscription(user["user_id"])
     await add_admin_log(message.from_user.id, "revoke_subscription", user["user_id"], label, "")
     await state.clear()
-    await message.answer(f"✅ Подписка у <b>{label}</b> отозвана.", reply_markup=admin_main_kb(), parse_mode="HTML")
+    await message.answer(
+        f"✅ Подписка у <b>{label}</b> отозвана.",
+        reply_markup=admin_main_kb(), parse_mode="HTML",
+    )
+
 
 @router.callback_query(F.data == "adm_check")
 async def adm_check_start(call: CallbackQuery, state: FSMContext) -> None:
@@ -225,7 +390,11 @@ async def adm_check_start(call: CallbackQuery, state: FSMContext) -> None:
         return
     await call.answer()
     await state.set_state(AdminStates.waiting_check)
-    await call.message.edit_text("🔍 <b>Проверить пользователя</b>\n\nВведи @username:", reply_markup=cancel_kb(), parse_mode="HTML")
+    await call.message.edit_text(
+        "🔍 <b>Проверить пользователя</b>\n\nВведи @username:",
+        reply_markup=cancel_kb(), parse_mode="HTML",
+    )
+
 
 @router.message(AdminStates.waiting_check)
 async def adm_check_do(message: Message, state: FSMContext) -> None:
@@ -235,23 +404,28 @@ async def adm_check_do(message: Message, state: FSMContext) -> None:
     if not user:
         await message.answer(error, reply_markup=cancel_kb(), parse_mode="HTML")
         return
-    label = format_user_label(user)
+    label   = format_user_label(user)
     expires = await get_subscription_expires(user["user_id"])
-    banned = await is_banned(user["user_id"])
+    banned  = await is_banned(user["user_id"])
     profile = await get_profile(user["user_id"])
     await state.clear()
     if expires:
-        active = "✅ Активна" if expires > datetime.utcnow() else "❌ Истекла"
+        active   = "✅ Активна" if expires > datetime.utcnow() else "❌ Истекла"
         sub_text = f"{active} (до {expires.strftime('%d.%m.%Y')})"
     else:
         sub_text = "❌ Нет"
     if profile:
-        glabel = "👨 Мужской" if profile["gender"] == "м" else "👩 Женский"
+        glabel       = "👨 Мужской" if profile["gender"] == "м" else "👩 Женский"
         profile_text = f"\n\n📋 <b>Анкета:</b>\n  Имя: {profile['name']}\n  Возраст: {profile['age']}\n  Пол: {glabel}"
     else:
         profile_text = "\n\n📋 Анкеты нет"
     text = f"🔍 <b>{label}</b>\n\n💳 Подписка: {sub_text}\n🚫 Бан: {'Да' if banned else 'Нет'}{profile_text}"
     await message.answer(text, reply_markup=admin_main_kb(), parse_mode="HTML")
+
+
+# ══════════════════════════════════════════════════════════════
+#  БАНЫ
+# ══════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "adm_bans")
 async def adm_bans(call: CallbackQuery) -> None:
@@ -259,7 +433,11 @@ async def adm_bans(call: CallbackQuery) -> None:
         await call.answer()
         return
     await call.answer()
-    await call.message.edit_text("🔒 <b>Управление банами</b>", reply_markup=bans_kb(), parse_mode="HTML")
+    await call.message.edit_text(
+        "🔒 <b>Управление банами</b>",
+        reply_markup=bans_kb(), parse_mode="HTML",
+    )
+
 
 @router.callback_query(F.data == "adm_ban")
 async def adm_ban_start(call: CallbackQuery, state: FSMContext) -> None:
@@ -268,7 +446,11 @@ async def adm_ban_start(call: CallbackQuery, state: FSMContext) -> None:
         return
     await call.answer()
     await state.set_state(AdminStates.waiting_ban_username)
-    await call.message.edit_text("🚫 <b>Забанить пользователя</b>\n\nВведи @username:", reply_markup=cancel_kb(), parse_mode="HTML")
+    await call.message.edit_text(
+        "🚫 <b>Забанить пользователя</b>\n\nВведи @username:",
+        reply_markup=cancel_kb(), parse_mode="HTML",
+    )
+
 
 @router.message(AdminStates.waiting_ban_username)
 async def adm_ban_username(message: Message, state: FSMContext) -> None:
@@ -281,24 +463,39 @@ async def adm_ban_username(message: Message, state: FSMContext) -> None:
     label = format_user_label(user)
     if await is_banned(user["user_id"]):
         await state.clear()
-        await message.answer(f"ℹ️ Пользователь <b>{label}</b> уже забанен.", reply_markup=admin_main_kb(), parse_mode="HTML")
+        await message.answer(
+            f"ℹ️ Пользователь <b>{label}</b> уже забанен.",
+            reply_markup=admin_main_kb(), parse_mode="HTML",
+        )
         return
     await state.update_data(target_id=user["user_id"], target_label=label)
     await state.set_state(AdminStates.waiting_ban_reason)
-    await message.answer(f"🚫 Баним: <b>{label}</b>\n\nВведи причину бана:", reply_markup=cancel_kb(), parse_mode="HTML")
+    await message.answer(
+        f"🚫 Баним: <b>{label}</b>\n\nВведи причину бана:",
+        reply_markup=cancel_kb(), parse_mode="HTML",
+    )
+
 
 @router.message(AdminStates.waiting_ban_reason)
 async def adm_ban_reason(message: Message, state: FSMContext) -> None:
     if not is_owner(message.from_user.id):
         return
-    reason = (message.text or "").strip()
-    data = await state.get_data()
-    target_id = data["target_id"]
+    reason   = (message.text or "").strip()
+    data     = await state.get_data()
+    target_id    = data["target_id"]
     target_label = data["target_label"]
     await ban_user(target_id, message.from_user.id, reason)
     await add_admin_log(message.from_user.id, "ban", target_id, target_label, f"причина: {reason}")
     await state.clear()
-    await message.answer(f"🚫 <b>{target_label}</b> забанен.\n📝 Причина: {reason}", reply_markup=admin_main_kb(), parse_mode="HTML")
+    await message.answer(
+        f"🚫 <b>{target_label}</b> забанен.\n📝 Причина: {reason}",
+        reply_markup=admin_main_kb(), parse_mode="HTML",
+    )
+    try:
+        await message.bot.send_message(target_id, f"🚫 Ты заблокирован в боте.\n📝 Причина: {reason}")
+    except Exception:
+        pass
+
 
 @router.callback_query(F.data == "adm_unban")
 async def adm_unban_start(call: CallbackQuery, state: FSMContext) -> None:
@@ -307,7 +504,11 @@ async def adm_unban_start(call: CallbackQuery, state: FSMContext) -> None:
         return
     await call.answer()
     await state.set_state(AdminStates.waiting_unban)
-    await call.message.edit_text("✅ <b>Разбанить пользователя</b>\n\nВведи @username:", reply_markup=cancel_kb(), parse_mode="HTML")
+    await call.message.edit_text(
+        "✅ <b>Разбанить пользователя</b>\n\nВведи @username:",
+        reply_markup=cancel_kb(), parse_mode="HTML",
+    )
+
 
 @router.message(AdminStates.waiting_unban)
 async def adm_unban_do(message: Message, state: FSMContext) -> None:
@@ -320,12 +521,27 @@ async def adm_unban_do(message: Message, state: FSMContext) -> None:
     label = format_user_label(user)
     if not await is_banned(user["user_id"]):
         await state.clear()
-        await message.answer(f"ℹ️ Пользователь <b>{label}</b> не забанен.", reply_markup=admin_main_kb(), parse_mode="HTML")
+        await message.answer(
+            f"ℹ️ Пользователь <b>{label}</b> не забанен.",
+            reply_markup=admin_main_kb(), parse_mode="HTML",
+        )
         return
     await unban_user(user["user_id"])
     await add_admin_log(message.from_user.id, "unban", user["user_id"], label, "")
     await state.clear()
-    await message.answer(f"✅ <b>{label}</b> разбанен.", reply_markup=admin_main_kb(), parse_mode="HTML")
+    await message.answer(
+        f"✅ <b>{label}</b> разбанен.",
+        reply_markup=admin_main_kb(), parse_mode="HTML",
+    )
+    try:
+        await message.bot.send_message(user["user_id"], "✅ Твой доступ в боте восстановлен.")
+    except Exception:
+        pass
+
+
+# ══════════════════════════════════════════════════════════════
+#  СПИСОК БАНОВ
+# ══════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "adm_banlist")
 async def adm_banlist(call: CallbackQuery) -> None:
@@ -335,17 +551,28 @@ async def adm_banlist(call: CallbackQuery) -> None:
     await call.answer()
     banned = await get_banned_list()
     if not banned:
-        await call.message.edit_text("🚫 <b>Список банов пуст</b>", reply_markup=back_kb(), parse_mode="HTML")
+        await call.message.edit_text(
+            "🚫 <b>Список банов пуст</b>",
+            reply_markup=back_kb(), parse_mode="HTML",
+        )
         return
     lines = ["🚫 <b>Забаненные пользователи:</b>\n"]
     for b in banned[:20]:
-        uname = f"@{b['username']}" if b.get("username") else f"id:{b['user_id']}"
+        uname  = f"@{b['username']}" if b.get("username") else f"id:{b['user_id']}"
         reason = b.get("reason") or "без причины"
-        dt = (b.get("banned_at") or "")[:10]
+        dt     = (b.get("banned_at") or "")[:10]
         lines.append(f"• {uname} — {reason} <i>({dt})</i>")
     if len(banned) > 20:
         lines.append(f"\n<i>...и ещё {len(banned) - 20}</i>")
-    await call.message.edit_text("\n".join(lines), reply_markup=back_kb(), parse_mode="HTML")
+    await call.message.edit_text(
+        "\n".join(lines),
+        reply_markup=back_kb(), parse_mode="HTML",
+    )
+
+
+# ══════════════════════════════════════════════════════════════
+#  ЛОГИ
+# ══════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "adm_logs")
 async def adm_logs(call: CallbackQuery) -> None:
@@ -357,12 +584,20 @@ async def adm_logs(call: CallbackQuery) -> None:
     if not logs:
         await call.message.edit_text("📋 Логов пока нет.", reply_markup=back_kb())
         return
-    action_labels = {"give_subscription": "✅ Выдал подписку", "revoke_subscription": "❌ Забрал подписку", "ban": "🚫 Забанил", "unban": "✅ Разбанил"}
+    action_labels = {
+        "give_subscription":   "✅ Выдал подписку",
+        "revoke_subscription": "❌ Забрал подписку",
+        "ban":                 "🚫 Забанил",
+        "unban":               "✅ Разбанил",
+    }
     lines = ["📋 <b>Последние действия:</b>\n"]
     for log in logs:
-        action = action_labels.get(log["action"], log["action"])
-        dt = log["created_at"][:16].replace("T", " ")
-        name = log.get("target_name") or "—"
+        action  = action_labels.get(log["action"], log["action"])
+        dt      = log["created_at"][:16].replace("T", " ")
+        name    = log.get("target_name") or "—"
         details = f" — {log['details']}" if log.get("details") else ""
         lines.append(f"• {action} <b>{name}</b>{details} <i>{dt}</i>")
-    await call.message.edit_text("\n".join(lines), reply_markup=back_kb(), parse_mode="HTML")
+    await call.message.edit_text(
+        "\n".join(lines),
+        reply_markup=back_kb(), parse_mode="HTML",
+    )
