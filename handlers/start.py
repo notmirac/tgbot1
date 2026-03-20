@@ -1,76 +1,32 @@
-# handlers/start.py
 import logging
 from aiogram import Router, F
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
+
+from config import config
 from database import (
     add_or_update_user, has_active_subscription,
     get_subscription_expires, has_profile, is_banned,
     get_user_lang, set_user_lang,
 )
-from keyboards import (
-    BTN_HOME, BTN_STATUS,
-    buy_access_keyboard, main_menu_keyboard, language_keyboard,
-    BTN_LANGUAGE,
-)
+from keyboards import buy_access_keyboard, main_menu_keyboard, language_keyboard
 from states import ChatStates
-from config import config
+from utils.i18n import tr, is_button
 
 logger = logging.getLogger(__name__)
 router = Router()
-
-# Тексты на двух языках
-TEXTS = {
-    "ru": {
-        "hello": "Привет, <b>{name}</b>! 👋\n\nВыбери раздел в меню ниже:",
-        "no_profile": "\n\n👤 Создай <b>анкету</b> — нажми «👤 Моя анкета».",
-        "banned": "🚫 Ты заблокирован в боте.",
-        "home": (
-            "🏠 <b>Главная страница</b>\n\n"
-            "• 👤 <b>Моя анкета</b>\n"
-            "• 🔞 <b>Чат 18+</b> (платно)\n"
-            "• 🖼 <b>Фото 18+</b> (платно)\n"
-            "• 💳 <b>Моя подписка</b>\n"
-            "• 🌐 <b>Язык</b>\n\nВыбирай! 👇"
-        ),
-        "sub_active": "💳 <b>Подписка активна</b>\n📅 До: <b>{date}</b>\n\nВсе разделы доступны 🎉",
-        "sub_none": "💳 <b>Нет подписки</b>\n\nКупи доступ 👇",
-        "lang_choose": "🌐 Выбери язык:",
-        "lang_set": "✅ Язык изменён на Русский 🇷🇺",
-    },
-    "en": {
-        "hello": "Hello, <b>{name}</b>! 👋\n\nChoose a section below:",
-        "no_profile": "\n\n👤 Create a <b>profile</b> — tap «👤 My Profile».",
-        "banned": "🚫 You are blocked.",
-        "home": (
-            "🏠 <b>Main menu</b>\n\n"
-            "• 👤 <b>My Profile</b>\n"
-            "• 🔞 <b>Chat 18+</b> (paid)\n"
-            "• 🖼 <b>Photos 18+</b> (paid)\n"
-            "• 💳 <b>My Subscription</b>\n"
-            "• 🌐 <b>Language</b>\n\nChoose! 👇"
-        ),
-        "sub_active": "💳 <b>Subscription active</b>\n📅 Until: <b>{date}</b>\n\nAll sections available 🎉",
-        "sub_none": "💳 <b>No subscription</b>\n\nBuy access 👇",
-        "lang_choose": "🌐 Choose language:",
-        "lang_set": "✅ Language set to English 🇬🇧",
-    },
-}
-
 
 def _price_label() -> str:
     if config.currency == "RUB":
         return f"{config.subscription_price // 100} руб."
     return f"{config.subscription_price / 100:.2f} {config.currency}"
 
-
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext) -> None:
     user_id = message.from_user.id
-
     if await is_banned(user_id):
-        await message.answer("🚫 Ты заблокирован в боте.")
+        await message.answer("🚫 You are blocked / Ты заблокирован.")
         return
 
     await state.clear()
@@ -80,86 +36,119 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         user_id=user_id,
         username=message.from_user.username,
         first_name=message.from_user.first_name,
-        language_code=message.from_user.language_code,
+        language_code=(message.from_user.language_code or "ru"),
     )
 
-    lang  = await get_user_lang(user_id)
-    t     = TEXTS[lang]
-    has_p = await has_profile(user_id)
-    hint  = t["no_profile"] if not has_p else ""
+    await message.answer(tr("ru", "start_choose_lang"), reply_markup=language_keyboard())
 
-    await message.answer(
-        t["hello"].format(name=message.from_user.first_name) + hint,
-        reply_markup=main_menu_keyboard(),
-        parse_mode="HTML",
-    )
-
-
-@router.message(lambda msg: msg.text == BTN_HOME)
+@router.message(lambda msg: is_button(msg.text, "home"))
 async def btn_home(message: Message, state: FSMContext) -> None:
     user_id = message.from_user.id
     if await is_banned(user_id):
-        await message.answer("🚫 Ты заблокирован.")
+        lang = await get_user_lang(user_id)
+        await message.answer(tr(lang, "banned"))
         return
+
     await add_or_update_user(
         user_id=user_id,
         username=message.from_user.username,
         first_name=message.from_user.first_name,
-        language_code=message.from_user.language_code,
+        language_code=(message.from_user.language_code or "ru"),
     )
     await state.set_state(ChatStates.main_menu)
     lang = await get_user_lang(user_id)
-    await message.answer(
-        TEXTS[lang]["home"],
-        reply_markup=main_menu_keyboard(),
-        parse_mode="HTML",
-    )
+    await message.answer(tr(lang, "home"), reply_markup=main_menu_keyboard(lang), parse_mode="HTML")
 
-
-@router.message(lambda msg: msg.text == BTN_STATUS)
+@router.message(lambda msg: is_button(msg.text, "status"))
 async def btn_subscription_status(message: Message, state: FSMContext) -> None:
     user_id = message.from_user.id
-    lang    = await get_user_lang(user_id)
-    t       = TEXTS[lang]
+    lang = await get_user_lang(user_id)
     try:
         if await has_active_subscription(user_id):
-            expires     = await get_subscription_expires(user_id)
+            expires = await get_subscription_expires(user_id)
             expires_str = expires.strftime("%d.%m.%Y") if expires else "—"
             await message.answer(
-                t["sub_active"].format(date=expires_str),
-                reply_markup=main_menu_keyboard(), parse_mode="HTML",
+                tr(lang, "sub_active", date=expires_str),
+                reply_markup=main_menu_keyboard(lang),
+                parse_mode="HTML",
             )
         else:
             await message.answer(
-                t["sub_none"],
-                reply_markup=buy_access_keyboard(_price_label()),
+                tr(lang, "sub_none"),
+                reply_markup=buy_access_keyboard(_price_label(), lang),
                 parse_mode="HTML",
             )
     except Exception as e:
         logger.error("btn_status error: %s", e)
-        await message.answer("⚠️ Ошибка. Попробуй ещё раз.", reply_markup=main_menu_keyboard())
+        await message.answer(
+            "⚠️ Ошибка. Попробуй ещё раз." if lang == "ru" else "⚠️ Error. Try again.",
+            reply_markup=main_menu_keyboard(lang),
+        )
 
-
-# ── Выбор языка ───────────────────────────────────────────────
-
-@router.message(lambda msg: msg.text == BTN_LANGUAGE)
+@router.message(lambda msg: is_button(msg.text, "language"))
 async def btn_language(message: Message) -> None:
     lang = await get_user_lang(message.from_user.id)
-    await message.answer(
-        TEXTS[lang]["lang_choose"],
-        reply_markup=language_keyboard(),
-    )
-
+    await message.answer(tr(lang, "lang_choose"), reply_markup=language_keyboard())
 
 @router.callback_query(F.data == "lang_ru")
-async def set_lang_ru(callback: CallbackQuery) -> None:
+async def set_lang_ru(callback: CallbackQuery, state: FSMContext) -> None:
     await set_user_lang(callback.from_user.id, "ru")
     await callback.answer("✅ Русский")
-    await callback.message.edit_text(TEXTS["ru"]["lang_set"])
-
+    try:
+        await callback.message.edit_text(tr("ru", "lang_set_ru"))
+    except Exception:
+        pass
+    await state.set_state(ChatStates.main_menu)
+    await callback.message.answer(tr("ru", "home"), reply_markup=main_menu_keyboard("ru"), parse_mode="HTML")
 
 @router.callback_query(F.data == "lang_en")
-async def set_lang_en(callback: CallbackQuery) -> None:
+async def set_lang_en(callback: CallbackQuery, state: FSMContext) -> None:
     await set_user_lang(callback.from_user.id, "en")
     await callback.answer("✅ English")
-    await callback.message.edit_text(TEXTS["en"]["lang_set"])
+    try:
+        await callback.message.edit_text(tr("en", "lang_set_en"))
+    except Exception:
+        pass
+    await state.set_state(ChatStates.main_menu)
+    await callback.message.answer(tr("en", "home"), reply_markup=main_menu_keyboard("en"), parse_mode="HTML")
+
+@router.message(lambda msg: is_button(msg.text, "support"))
+async def support_entry(message: Message, state: FSMContext) -> None:
+    lang = await get_user_lang(message.from_user.id)
+    await state.set_state(ChatStates.waiting_support_message)
+    await message.answer(tr(lang, "support_intro"), reply_markup=main_menu_keyboard(lang), parse_mode="HTML")
+
+@router.message(ChatStates.waiting_support_message)
+async def support_send(message: Message, state: FSMContext) -> None:
+    lang = await get_user_lang(message.from_user.id)
+
+    if is_button(message.text, "home") or is_button(message.text, "back"):
+        await state.set_state(ChatStates.main_menu)
+        await message.answer(tr(lang, "home"), reply_markup=main_menu_keyboard(lang), parse_mode="HTML")
+        return
+
+    text = (message.text or "").strip()
+    if not text:
+        await message.answer(tr(lang, "support_empty"), reply_markup=main_menu_keyboard(lang))
+        return
+
+    if config.admin_id:
+        try:
+            await message.bot.send_message(
+                config.admin_id,
+                tr(
+                    lang,
+                    "support_admin_message",
+                    name=message.from_user.full_name,
+                    user_id=message.from_user.id,
+                    username=message.from_user.username or "-",
+                    lang=lang,
+                    text=text,
+                ),
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.error("support send failed: %s", e)
+
+    await state.set_state(ChatStates.main_menu)
+    await message.answer(tr(lang, "support_sent"), reply_markup=main_menu_keyboard(lang))
