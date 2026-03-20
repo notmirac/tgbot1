@@ -24,12 +24,11 @@ class Config:
 
     payment_provider_token: str = field(default_factory=lambda: os.getenv("PAYMENT_PROVIDER_TOKEN", ""))
 
-    # Новый формат цен
     subscription_price_rub: int = field(default_factory=lambda: int(os.getenv("SUBSCRIPTION_PRICE_RUB", "30000")))
     subscription_price_usd: int = field(default_factory=lambda: int(os.getenv("SUBSCRIPTION_PRICE_USD", "300")))
     subscription_days: int = field(default_factory=lambda: int(os.getenv("SUBSCRIPTION_DAYS", "30")))
 
-    # Совместимость со старым кодом
+    # Совместимость со старыми файлами проекта
     currency: str = field(default_factory=lambda: os.getenv("CURRENCY", "RUB"))
     subscription_price: int = field(default_factory=lambda: int(os.getenv("SUBSCRIPTION_PRICE", "30000")))
 
