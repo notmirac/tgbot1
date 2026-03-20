@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -10,7 +11,14 @@ from typing import AsyncIterator, Optional
 import aiosqlite
 
 logger = logging.getLogger(__name__)
-DB_PATH = Path(__file__).resolve().parent.parent / "bot_database.db"
+
+DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
+try:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
+
+DB_PATH = DATA_DIR / "bot_database.db"
 
 
 @asynccontextmanager
@@ -33,6 +41,26 @@ async def _safe_add_column(db: aiosqlite.Connection, table: str, col: str, colty
         pass
 
 
+async def _ensure_user_exists(
+    db: aiosqlite.Connection,
+    user_id: int,
+    username: Optional[str] = None,
+    first_name: Optional[str] = None,
+    language_code: Optional[str] = None,
+) -> None:
+    await db.execute(
+        """
+        INSERT INTO users (user_id, username, first_name, language_code)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            username = COALESCE(excluded.username, users.username),
+            first_name = COALESCE(excluded.first_name, users.first_name),
+            language_code = COALESCE(excluded.language_code, users.language_code)
+        """,
+        (user_id, username, first_name, language_code),
+    )
+
+
 async def init_db() -> None:
     async with _db() as db:
         await db.execute(
@@ -46,7 +74,6 @@ async def init_db() -> None:
                 preferred_gender TEXT,
                 preferred_age_min INTEGER,
                 preferred_age_max INTEGER,
-                country TEXT,
                 created_at TEXT DEFAULT (datetime('now'))
             )
             """
@@ -112,16 +139,12 @@ async def init_db() -> None:
         await _safe_add_column(db, "users", "preferred_gender", "TEXT")
         await _safe_add_column(db, "users", "preferred_age_min", "INTEGER")
         await _safe_add_column(db, "users", "preferred_age_max", "INTEGER")
-        await _safe_add_column(db, "users", "country", "TEXT")
         await _safe_add_column(db, "subscriptions", "issued_by", "INTEGER")
         await _safe_add_column(db, "banned_users", "username", "TEXT")
         await _safe_add_column(db, "banned_users", "banned_by", "INTEGER")
         await _safe_add_column(db, "banned_users", "reason", "TEXT")
         await _safe_add_column(db, "banned_users", "banned_at", "TEXT DEFAULT (datetime('now'))")
-        await _safe_add_column(db, "admin_logs", "target_id", "INTEGER")
         await _safe_add_column(db, "admin_logs", "target_name", "TEXT")
-        await _safe_add_column(db, "admin_logs", "details", "TEXT")
-        await _safe_add_column(db, "admin_logs", "created_at", "TEXT DEFAULT (datetime('now'))")
         await db.commit()
 
     logger.info("БД готова: %s", DB_PATH)
@@ -129,17 +152,7 @@ async def init_db() -> None:
 
 async def add_or_update_user(user_id: int, username: Optional[str], first_name: Optional[str], language_code: Optional[str] = None) -> None:
     async with _db() as db:
-        await db.execute(
-            """
-            INSERT INTO users (user_id, username, first_name, language_code)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET
-                username = excluded.username,
-                first_name = excluded.first_name,
-                language_code = COALESCE(excluded.language_code, users.language_code)
-            """,
-            (user_id, username, first_name, language_code),
-        )
+        await _ensure_user_exists(db, user_id, username, first_name, language_code)
         await db.commit()
 
 
@@ -166,6 +179,7 @@ async def set_user_lang(user_id: int, lang: str) -> None:
 
 async def set_partner_preferences(user_id: int, preferred_gender: str, age_min: int, age_max: int) -> None:
     async with _db() as db:
+        await _ensure_user_exists(db, user_id)
         await db.execute(
             """
             INSERT INTO users (user_id, preferred_gender, preferred_age_min, preferred_age_max)
@@ -204,7 +218,7 @@ async def find_user_by_username(username: str) -> Optional[dict]:
     async with _db() as db:
         row = await (
             await db.execute(
-                "SELECT user_id, username, first_name, country FROM users WHERE LOWER(username) = ?",
+                "SELECT user_id, username, first_name FROM users WHERE LOWER(username) = ?",
                 (clean,),
             )
         ).fetchone()
@@ -220,26 +234,39 @@ def format_user_label(user: dict) -> str:
 async def get_stats() -> dict:
     async with _db() as db:
         now = datetime.utcnow().isoformat()
+
         total_users = (await (await db.execute("SELECT COUNT(*) AS c FROM users")).fetchone())[0]
         total_profiles = (await (await db.execute("SELECT COUNT(*) AS c FROM profiles")).fetchone())[0]
         total_banned = (await (await db.execute("SELECT COUNT(*) AS c FROM banned_users")).fetchone())[0]
-        active_subs = (
-            await (
-                await db.execute("SELECT COUNT(DISTINCT user_id) FROM subscriptions WHERE expires_at > ?", (now,))
-            ).fetchone()
-        )[0]
-        total_subs = (await (await db.execute("SELECT COUNT(*) FROM subscriptions")).fetchone())[0]
+        active_subs = (await (await db.execute("SELECT COUNT(DISTINCT user_id) FROM subscriptions WHERE expires_at > ?", (now,))).fetchone())[0]
+        expired_subs = (await (await db.execute("SELECT COUNT(*) FROM subscriptions WHERE expires_at <= ?", (now,))).fetchone())[0]
+        total_subs_issued = (await (await db.execute("SELECT COUNT(*) FROM subscriptions")).fetchone())[0]
+        paid_subs = (await (await db.execute("SELECT COUNT(*) FROM subscriptions WHERE payment_id IS NOT NULL AND payment_id != 'manual_admin'")).fetchone())[0]
+        manual_subs = (await (await db.execute("SELECT COUNT(*) FROM subscriptions WHERE payment_id = 'manual_admin'")).fetchone())[0]
+
+        country_rows = await (await db.execute(
+            "SELECT COALESCE(language_code, 'unknown') AS country, COUNT(*) AS cnt FROM users GROUP BY COALESCE(language_code, 'unknown') ORDER BY cnt DESC"
+        )).fetchall()
+
     return {
         "total_users": total_users,
         "total_profiles": total_profiles,
         "total_banned": total_banned,
+        "active_subs": active_subs,
+        "expired_subs": expired_subs,
+        "total_subs_issued": total_subs_issued,
+        "paid_subs": paid_subs,
+        "manual_subs": manual_subs,
+        "countries": [(r["country"], r["cnt"]) for r in country_rows],
+        # backward compatibility keys
         "active_subscriptions": active_subs,
-        "total_subscriptions": total_subs,
+        "total_subscriptions": total_subs_issued,
     }
 
 
 async def add_subscription(user_id: int, payment_id: str, amount: int, currency: str, days: int, issued_by: Optional[int] = None) -> None:
     async with _db() as db:
+        await _ensure_user_exists(db, user_id)
         last = await (
             await db.execute(
                 "SELECT expires_at FROM subscriptions WHERE user_id = ? ORDER BY expires_at DESC LIMIT 1",
@@ -300,6 +327,8 @@ async def get_profile(user_id: int) -> Optional[dict]:
 
 async def save_profile(user_id: int, name: str, age: int, gender: str, profile_type: str = "normal") -> None:
     async with _db() as db:
+        # Ключевой фикс: сначала гарантируем запись в users, чтобы не падал FOREIGN KEY.
+        await _ensure_user_exists(db, user_id)
         await db.execute(
             """
             INSERT INTO profiles (user_id, name, age, gender, profile_type, updated_at)
@@ -366,8 +395,20 @@ async def get_banned_list() -> list[dict]:
 
 
 async def add_admin_log(admin_id: int, action: str, target_id: int, target_name: str, details: str = "") -> None:
-    return None
+    async with _db() as db:
+        await db.execute(
+            "INSERT INTO admin_logs (admin_id, action, target_id, target_name, details) VALUES (?, ?, ?, ?, ?)",
+            (admin_id, action, target_id, target_name, details),
+        )
+        await db.commit()
 
 
-async def get_admin_logs(limit: int = 15) -> list[dict]:
-    return []
+async def get_admin_logs(limit: int = 20) -> list[dict]:
+    async with _db() as db:
+        rows = await (
+            await db.execute(
+                "SELECT admin_id, action, target_id, target_name, details, created_at FROM admin_logs ORDER BY id DESC LIMIT ?",
+                (limit,),
+            )
+        ).fetchall()
+    return [dict(r) for r in rows]

@@ -1,5 +1,7 @@
+
 from .main_menu import (
     main_menu_keyboard,
+    chat_keyboard,
     live_chat_keyboard,
     gender_keyboard,
     age_range_keyboard,
@@ -7,6 +9,7 @@ from .main_menu import (
     buy_access_keyboard,
     language_keyboard,
     BTN_HOME,
+    BTN_CHAT,
     BTN_CHAT18,
     BTN_PHOTO18,
     BTN_BACK,
@@ -14,6 +17,8 @@ from .main_menu import (
     BTN_PROFILE,
     BTN_LANGUAGE,
     BTN_SUPPORT,
+    BTN_SEARCH,
+    BTN_SEARCH18,
     BTN_END_CHAT,
     BTN_MALE,
     BTN_FEMALE,
