@@ -18,8 +18,10 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 def _price_label() -> str:
-    if config.currency == "RUB":
+    if config.currency.upper() == "RUB":
         return f"{config.subscription_price // 100} руб."
+    if config.currency.upper() == "USD":
+        return f"${config.subscription_price / 100:.2f}"
     return f"{config.subscription_price / 100:.2f} {config.currency}"
 
 @router.message(CommandStart())
@@ -132,23 +134,37 @@ async def support_send(message: Message, state: FSMContext) -> None:
         await message.answer(tr(lang, "support_empty"), reply_markup=main_menu_keyboard(lang))
         return
 
-    if config.admin_id:
-        try:
-            await message.bot.send_message(
-                config.admin_id,
-                tr(
-                    lang,
-                    "support_admin_message",
-                    name=message.from_user.full_name,
-                    user_id=message.from_user.id,
-                    username=message.from_user.username or "-",
-                    lang=lang,
-                    text=text,
-                ),
-                parse_mode="HTML",
-            )
-        except Exception as e:
-            logger.error("support send failed: %s", e)
+    if not config.admin_id:
+        logger.error("ADMIN_ID is not configured. Support message was not sent.")
+        await state.set_state(ChatStates.main_menu)
+        await message.answer(
+            "⚠️ ADMIN_ID не настроен. Сообщение не отправлено." if lang == "ru" else "⚠️ ADMIN_ID is not configured. Message was not sent.",
+            reply_markup=main_menu_keyboard(lang),
+        )
+        return
+
+    try:
+        await message.bot.send_message(
+            config.admin_id,
+            tr(
+                lang,
+                "support_admin_message",
+                name=message.from_user.full_name,
+                user_id=message.from_user.id,
+                username=message.from_user.username or "-",
+                lang=lang,
+                text=text,
+            ),
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.error("support send failed: %s", e)
+        await state.set_state(ChatStates.main_menu)
+        await message.answer(
+            "⚠️ Не удалось отправить сообщение администрации." if lang == "ru" else "⚠️ Failed to send the message to administration.",
+            reply_markup=main_menu_keyboard(lang),
+        )
+        return
 
     await state.set_state(ChatStates.main_menu)
     await message.answer(tr(lang, "support_sent"), reply_markup=main_menu_keyboard(lang))

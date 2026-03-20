@@ -1,0 +1,10 @@
+.env
+.env2
+__pycache__/
+*.pyc
+venv/
+logs/
+backups/
+*.db
+bot_database
+tgbot.env
