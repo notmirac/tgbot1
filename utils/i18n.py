@@ -17,6 +17,11 @@ TEXTS: dict[str, dict[str, str]] = {
         "btn_end_chat": "❌ Завершить чат",
         "btn_male": "👨 Мужской",
         "btn_female": "👩 Женский",
+        "btn_edit_name": "✏️ Изменить имя",
+        "btn_edit_age": "✏️ Изменить возраст",
+        "btn_edit_gender": "✏️ Изменить пол",
+        "btn_recreate": "🔄 Пересоздать анкету",
+        "btn_back_profile": "◀️ Назад",
         "hello": "Привет, <b>{name}</b>! 👋\n\nВыбери раздел ниже:",
         "no_profile": "\n\n👤 Создай <b>анкету</b> — нажми «👤 Моя анкета».",
         "banned": "🚫 Ты заблокирован в боте.",
@@ -35,27 +40,17 @@ TEXTS: dict[str, dict[str, str]] = {
         "lang_set_ru": "✅ Язык изменён на Русский 🇷🇺",
         "lang_set_en": "✅ Language set to English 🇬🇧",
         "start_choose_lang": "🌐 Choose language / Выбери язык:",
-        "chat18_need_profile": "👤 Для этого раздела нужна анкета.\nНажми «👤 Моя анкета», чтобы создать её.",
-        "chat18_underage": "🔞 Этот раздел только для совершеннолетних.\nТебе {age} лет — доступ закрыт.",
-        "chat18_need_sub": "🔞 <b>Чат 18+</b>\n\n🔒 Этот раздел доступен только по подписке.\n\nСтоимость: <b>{price}</b>",
-        "chat18_choose_gender": "Кого ищем?",
-        "chat18_current_gender": "Сейчас выбран: <b>{gender}</b>",
-        "chat18_choose_age": "Выбери возраст собеседника:",
-        "chat18_gender_invalid": "Выбери пол кнопкой ниже.",
-        "chat18_age_invalid": "Выбери диапазон возраста кнопкой ниже.",
-        "chat18_searching": "⏳ <b>Поиск собеседника...</b>\n\nВ очереди: примерно <b>{size}</b> человек\n\nСоединим автоматически через несколько секунд.",
-        "search_cancelled": "Поиск остановлен.",
-        "search_wait": "Ищем собеседника... Нажми «❌ Завершить чат», чтобы отменить.",
-        "partner_found": "🎉 <b>Собеседник найден</b>\n\n{name}, {age} лет\n{gender}\n\nМожешь начинать общение.",
-        "chat_session_ended": "Пользователь завершил сеанс",
-        "buy_access": "💳 Купить доступ — {price}",
-        "subscription_more": "ℹ️ Что входит?",
-        "subscription_info": "Подписка на {days} дней.\n\n✅ Чат 18+\n✅ Фото 18+\n✅ Мгновенная активация",
         "support_intro": "📞 <b>Связь с администрацией</b>\n\n⏰ Время работы: <b>10:00–23:00</b>\n\nНапиши сообщение одним текстом, и мы передадим его администратору.",
         "support_sent": "✅ Сообщение отправлено администрации.",
         "support_empty": "⚠️ Напиши сообщение текстом.",
         "support_failed": "⚠️ Не удалось отправить сообщение администрации.",
         "support_admin_message": "📩 <b>Новое обращение</b>\n\n👤 Пользователь: {name}\n🆔 ID: <code>{user_id}</code>\n🔗 Username: @{username}\n🌐 Язык: {lang}\n\n💬 Сообщение:\n{text}",
+        "buy_access": "💳 Купить доступ — {price}",
+        "subscription_more": "ℹ️ Что входит?",
+        "subscription_info": "Подписка на {days} дней.\n\n✅ Чат 18+\n✅ Фото 18+\n✅ Мгновенная активация",
+        "profile_title": "👤 <b>Твоя анкета</b>",
+        "profile_summary": "📝 Имя: <b>{name}</b>\n🎂 Возраст: <b>{age}</b>\n⚧ Пол: <b>{gender}</b>\n📋 Тип: <b>{ptype}</b>\n\nЧто хочешь изменить?",
+        "partner_found": "🎉 <b>Собеседник найден</b>\n\n{name}, {age} лет\n{gender}\n\nМожешь начинать общение.",
     },
     "en": {
         "btn_home": "🏠 Main menu",
@@ -69,6 +64,11 @@ TEXTS: dict[str, dict[str, str]] = {
         "btn_end_chat": "❌ End chat",
         "btn_male": "👨 Male",
         "btn_female": "👩 Female",
+        "btn_edit_name": "✏️ Edit name",
+        "btn_edit_age": "✏️ Edit age",
+        "btn_edit_gender": "✏️ Edit gender",
+        "btn_recreate": "🔄 Recreate profile",
+        "btn_back_profile": "◀️ Back",
         "hello": "Hello, <b>{name}</b>! 👋\n\nChoose a section below:",
         "no_profile": "\n\n👤 Create a <b>profile</b> — tap «👤 My Profile».",
         "banned": "🚫 You are blocked.",
@@ -87,27 +87,17 @@ TEXTS: dict[str, dict[str, str]] = {
         "lang_set_ru": "✅ Language set to Russian 🇷🇺",
         "lang_set_en": "✅ Language set to English 🇬🇧",
         "start_choose_lang": "🌐 Choose language / Выбери язык:",
-        "chat18_need_profile": "👤 A profile is required for this section.\nTap “👤 My Profile” to create it.",
-        "chat18_underage": "🔞 This section is for adults only.\nYou are {age} years old — access denied.",
-        "chat18_need_sub": "🔞 <b>Chat 18+</b>\n\n🔒 This section is available only with a subscription.\n\nPrice: <b>{price}</b>",
-        "chat18_choose_gender": "Who are we looking for?",
-        "chat18_current_gender": "Currently selected: <b>{gender}</b>",
-        "chat18_choose_age": "Choose the partner's age:",
-        "chat18_gender_invalid": "Choose gender using the buttons below.",
-        "chat18_age_invalid": "Choose an age range using the buttons below.",
-        "chat18_searching": "⏳ <b>Searching for a partner...</b>\n\nIn queue: about <b>{size}</b> people\n\nYou will be connected automatically in a few seconds.",
-        "search_cancelled": "Search stopped.",
-        "search_wait": "Searching for a partner... Press “❌ End chat” to cancel.",
-        "partner_found": "🎉 <b>Partner found</b>\n\n{name}, {age} years old\n{gender}\n\nYou can start chatting now.",
-        "chat_session_ended": "User ended the session",
-        "buy_access": "💳 Buy access — {price}",
-        "subscription_more": "ℹ️ What's included?",
-        "subscription_info": "Subscription for {days} days.\n\n✅ Chat 18+\n✅ Photos 18+\n✅ Instant activation",
         "support_intro": "📞 <b>Contact administration</b>\n\n⏰ Working hours: <b>10:00–23:00</b>\n\nSend one text message and we will forward it to the administrator.",
         "support_sent": "✅ Message sent to the administration.",
         "support_empty": "⚠️ Please send a text message.",
         "support_failed": "⚠️ Failed to send the message to administration.",
         "support_admin_message": "📩 <b>New support message</b>\n\n👤 User: {name}\n🆔 ID: <code>{user_id}</code>\n🔗 Username: @{username}\n🌐 Language: {lang}\n\n💬 Message:\n{text}",
+        "buy_access": "💳 Buy access — {price}",
+        "subscription_more": "ℹ️ What's included?",
+        "subscription_info": "Subscription for {days} days.\n\n✅ Chat 18+\n✅ Photos 18+\n✅ Instant activation",
+        "profile_title": "👤 <b>Your profile</b>",
+        "profile_summary": "📝 Name: <b>{name}</b>\n🎂 Age: <b>{age}</b>\n⚧ Gender: <b>{gender}</b>\n📋 Type: <b>{ptype}</b>\n\nWhat would you like to change?",
+        "partner_found": "🎉 <b>Partner found</b>\n\n{name}, {age} years old\n{gender}\n\nYou can start chatting now.",
     },
 }
 
@@ -121,7 +111,7 @@ def tr(lang: str | None, key: str, **kwargs: Any) -> str:
     lang = normalize_lang(lang)
     template = TEXTS.get(lang, TEXTS[DEFAULT_LANG]).get(key)
     if template is None:
-        template = TEXTS[DEFAULT_LANG].get(key, key)
+        return key
     return template.format(**kwargs)
 
 def btn(lang: str | None, key: str) -> str:
@@ -139,3 +129,8 @@ def gender_label(gender: str | None, lang: str | None) -> str:
     if gender in {"ж", "female"}:
         return btn(lang, "female")
     return gender or "—"
+
+def profile_type_label(profile_type: str | None, lang: str | None) -> str:
+    if profile_type == "adult":
+        return "🔞 18+"
+    return "👤 Обычная" if normalize_lang(lang) == "ru" else "👤 Regular"
