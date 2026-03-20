@@ -16,29 +16,24 @@ def _require(key: str) -> str:
 @dataclass
 class Config:
     bot_token: str = field(default_factory=lambda: _require("BOT_TOKEN"))
-
-    # Ключ можно не задавать, если чат-модель временно не используется
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
     openai_base_url: str | None = field(default_factory=lambda: os.getenv("OPENAI_BASE_URL") or None)
-
     chat_model: str = field(default_factory=lambda: os.getenv("CHAT_MODEL", "llama-3.3-70b-versatile"))
     chat_18_model: str = field(default_factory=lambda: os.getenv("CHAT_18_MODEL", "llama-3.3-70b-versatile"))
-
     payment_provider_token: str = field(default_factory=lambda: os.getenv("PAYMENT_PROVIDER_TOKEN", ""))
 
-    # По умолчанию цена в долларах: 3.00 USD = 300 центов
-    subscription_price: int = field(default_factory=lambda: int(os.getenv("SUBSCRIPTION_PRICE", "300")))
-    currency: str = field(default_factory=lambda: os.getenv("CURRENCY", "USD"))
+    subscription_price_rub: int = field(default_factory=lambda: int(os.getenv("SUBSCRIPTION_PRICE_RUB", "30000")))
+    subscription_price_usd: int = field(default_factory=lambda: int(os.getenv("SUBSCRIPTION_PRICE_USD", "300")))
     subscription_days: int = field(default_factory=lambda: int(os.getenv("SUBSCRIPTION_DAYS", "30")))
 
-    # Куда пересылать обращения из кнопки "Связь с администрацией"
-    admin_id: int = field(default_factory=lambda: int(os.getenv("ADMIN_ID", "0")))
+    admin_id: int = field(default_factory=lambda: int(os.getenv("ADMIN_ID", "8592334405")))
+    admin_username: str = field(default_factory=lambda: os.getenv("ADMIN_USERNAME", "@Alinka481"))
 
     photo_18_ids: list[str] = field(
         default_factory=lambda: [p.strip() for p in os.getenv("PHOTO_18_IDS", "").split(",") if p.strip()]
     )
 
-    reply_delay_min: float = 3.0
-    reply_delay_max: float = 7.0
+    reply_delay_min: float = 2.0
+    reply_delay_max: float = 5.0
 
 config = Config()

@@ -1,37 +1,29 @@
-from __future__ import annotations
-
 import random
 
-FEMALE_NAMES = [
-    "Алина", "София", "Вика", "Кира", "Полина", "Лера", "Милана", "Ева", "Лиза", "Катя",
-    "Ника", "Марина", "Аня", "Юля", "Дарья", "Настя", "Алина", "Вероника", "Диана", "Оля",
-]
-
 MALE_NAMES = [
-    "Артём", "Максим", "Данил", "Кирилл", "Егор", "Илья", "Никита", "Роман", "Алексей", "Дима",
-    "Матвей", "Саша", "Влад", "Миша", "Павел", "Тимур", "Денис", "Сергей", "Игорь", "Антон",
+    "Алексей", "Максим", "Дмитрий", "Иван", "Андрей",
+    "Ethan", "Daniel", "Michael", "Ryan", "Leo",
+]
+FEMALE_NAMES = [
+    "Алина", "София", "Мария", "Анна", "Екатерина",
+    "Emma", "Olivia", "Mia", "Lily", "Chloe",
 ]
 
-OPENERS_RU = {
-    "ж": [
-        "Привет 🙂", "Хей) Как ты?", "Приветик, чем занят?", "Ну привет 😌", "Привет, приятно познакомиться",
-    ],
-    "м": [
-        "Привет 👋", "Хай, как дела?", "Привет, чем занимаешься?", "Ну привет", "Здарова 🙂",
-    ],
-}
+def _label(gender: str) -> str:
+    return "Мужской" if gender == "м" else "Женский"
 
+def build_virtual_profile(preferred_gender: str | None = None, age_min: int = 18, age_max: int = 50) -> dict:
+    gender = preferred_gender if preferred_gender in {"м", "ж"} else random.choice(["м", "ж"])
+    names = MALE_NAMES if gender == "м" else FEMALE_NAMES
 
-def build_virtual_profile(preferred_gender: str, age_min: int, age_max: int) -> dict:
-    gender = preferred_gender if preferred_gender in {"м", "ж"} else "ж"
-    names = FEMALE_NAMES if gender == "ж" else MALE_NAMES
-    safe_min = max(18, min(age_min, age_max))
-    safe_max = min(50, max(age_min, age_max))
-    age = random.randint(safe_min, safe_max)
-    name = random.choice(names)
+    age_min = max(18, int(age_min or 18))
+    age_max = min(50, int(age_max or 50))
+    if age_min > age_max:
+        age_min, age_max = age_max, age_min
+
     return {
-        "name": name,
-        "age": age,
+        "name": random.choice(names),
+        "age": random.randint(age_min, age_max),
         "gender": gender,
-        "opener": random.choice(OPENERS_RU[gender]),
+        "gender_label": _label(gender),
     }

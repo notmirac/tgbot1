@@ -1,77 +1,124 @@
-import asyncio
-import logging
+from __future__ import annotations
 import random
-from typing import Optional
-
-from openai import AsyncOpenAI, OpenAIError
-
+from typing import Any
 from config import config
 
-logger = logging.getLogger(__name__)
-
-
-def _make_client() -> AsyncOpenAI:
-    kwargs: dict = {"api_key": config.openai_api_key}
-    if config.openai_base_url:
-        kwargs["base_url"] = config.openai_base_url
-    return AsyncOpenAI(**kwargs)
-
-
-_client: Optional[AsyncOpenAI] = None
-
-
-def get_client() -> AsyncOpenAI:
-    global _client
-    if _client is None:
-        _client = _make_client()
-    return _client
-
-
-async def get_virtual_reply(user_message: str, partner_profile: dict, history: Optional[list[dict]] = None, lang: str = "ru") -> str:
+def _heuristic_reply(user_text: str, partner: dict | None, history: list[dict[str, str]] | None, lang: str) -> str:
+    text = (user_text or "").strip()
+    low = text.lower()
     history = history or []
-    partner_name = partner_profile.get("name", "Собеседник")
-    partner_age = partner_profile.get("age", 22)
-    partner_gender = partner_profile.get("gender", "ж")
-    tone = "девушка" if partner_gender == "ж" else "мужчина"
 
-    language_prompt = "Отвечай только на русском языке." if lang != "en" else "Reply only in English."
-    system_prompt = (
-        f"Ты ведешь переписку как обычный {tone} по имени {partner_name}, возраст {partner_age}. "
-        f"{language_prompt} Пиши естественно, живо, короткими сообщениями, как в мессенджере. "
-        "Не используй длинные абзацы. Иногда уместны эмодзи. Не говори, что ты AI, бот или программа. "
-        "Не придумывай системные сообщения, говори только как собеседник."
-    )
+    prev_assistant = [m["content"] for m in history if m.get("role") == "assistant"]
+    partner_name = (partner or {}).get("name", "Собеседник" if lang == "ru" else "Partner")
 
-    messages: list[dict] = [{"role": "system", "content": system_prompt}]
-    messages.extend(history[-20:])
-    messages.append({"role": "user", "content": user_message})
+    if lang == "ru":
+        if "как тебя зовут" in low or "тебя зовут" in low:
+            return f"Меня зовут {partner_name} 🙂 А тебя?"
+        if "сколько тебе лет" in low or ("сколько" in low and "лет" in low):
+            age = (partner or {}).get("age", 24)
+            return f"Мне {age}. А тебе?"
+        if "откуда" in low:
+            options = ["Я из Москвы 🙂 А ты?", "Я из Питера. А ты откуда?", "Я из России 🙂 А ты?"]
+        elif "что делаешь" in low or "чем занимаешься" in low:
+            options = ["Сейчас общаюсь с тобой 🙂 А ты чем занимаешься?", "Отдыхаю немного. А ты?", "Слушаю музыку и переписываюсь 🙂"]
+        elif "привет" in low or "здар" in low or "hello" in low or "hi" in low:
+            options = ["Привет 🙂 Как ты?", "Приветик. Как настроение?", "Хай 🙂 Что делаешь?"]
+        elif "как дела" in low:
+            options = ["У меня всё хорошо 🙂 А у тебя?", "Нормально, спасибо 🙂 Как ты?", "Хорошо. А как у тебя дела?"]
+        else:
+            options = [
+                "Интересно 🙂 Расскажи чуть подробнее.",
+                "Поняла тебя. И что дальше?",
+                "Хм, звучит любопытно 🙂",
+                "А тебе самому что нравится больше всего?",
+                "Ясно 🙂 Продолжай, интересно.",
+            ]
+    else:
+        if "your name" in low or "what is your name" in low:
+            return f"My name is {partner_name} 🙂 And yours?"
+        if "how old are you" in low or ("how" in low and "old" in low):
+            age = (partner or {}).get("age", 24)
+            return f"I am {age}. What about you?"
+        if "where are you from" in low:
+            options = ["I'm from Russia 🙂 What about you?", "I'm from Moscow. And you?", "I'm from Saint Petersburg 🙂 And you?"]
+        elif "what are you doing" in low or "what do you do" in low:
+            options = ["Just chatting with you 🙂 What about you?", "Relaxing a bit. And you?", "Listening to music and chatting 🙂"]
+        elif "hello" in low or "hi" in low or "hey" in low:
+            options = ["Hi 🙂 How are you?", "Hey 🙂 How's your mood?", "Hello 🙂 What are you doing?"]
+        elif "how are you" in low:
+            options = ["I'm good 🙂 And you?", "Doing well, thanks 🙂 How about you?", "Pretty good 🙂 What about you?"]
+        else:
+            options = [
+                "Interesting 🙂 Tell me a bit more.",
+                "I see. What happened next?",
+                "Hmm, that sounds curious 🙂",
+                "What do you like most about it?",
+                "Got it 🙂 Keep going.",
+            ]
 
-    await asyncio.sleep(random.uniform(max(1.0, config.reply_delay_min), max(1.8, config.reply_delay_max - 1.0)))
+    for reply in options:
+        if reply not in prev_assistant:
+            return reply
+    return random.choice(options)
+
+async def get_virtual_reply(user_text: str, partner: dict | None = None, history: list[dict[str, str]] | None = None, lang: str = "ru") -> str:
+    if not config.openai_api_key:
+        return _heuristic_reply(user_text, partner, history, lang)
 
     try:
-        response = await get_client().chat.completions.create(
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(
+            api_key=config.openai_api_key,
+            base_url=config.openai_base_url,
+        )
+
+        system_prompt = (
+            "Ты ведёшь обычный дружелюбный диалог короткими естественными сообщениями. "
+            "Не повторяй одно и то же, отвечай по смыслу последнего сообщения, учитывай историю. "
+            "Если пользователь спрашивает имя или возраст — отвечай данными из профиля."
+            if lang == "ru"
+            else
+            "You are having a normal friendly chat using short natural messages. "
+            "Do not repeat yourself, answer the meaning of the latest user message, and use chat history. "
+            "If the user asks for name or age, answer using the profile data."
+        )
+
+        partner_name = (partner or {}).get("name", "Partner")
+        partner_age = (partner or {}).get("age", 24)
+        partner_gender = (partner or {}).get("gender", "ж")
+
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "system",
+                "content": (
+                    f"Профиль собеседника: имя={partner_name}, возраст={partner_age}, пол={partner_gender}."
+                    if lang == "ru"
+                    else f"Chat partner profile: name={partner_name}, age={partner_age}, gender={partner_gender}."
+                ),
+            },
+        ]
+
+        for item in (history or [])[-12:]:
+            role = item.get("role")
+            content = item.get("content")
+            if role in {"user", "assistant"} and content:
+                messages.append({"role": role, "content": content})
+
+        messages.append({"role": "user", "content": user_text})
+
+        response = await client.chat.completions.create(
             model=config.chat_18_model or config.chat_model,
             messages=messages,
-            max_tokens=220,
             temperature=0.9,
+            max_tokens=120,
         )
+
         text = (response.choices[0].message.content or "").strip()
-        return text or partner_profile.get("opener", "Привет 🙂")
-    except OpenAIError as exc:
-        logger.error("OpenAI API error: %s", exc)
-        fallback = [
-            "Привет 🙂 Расскажи что-нибудь о себе",
-            "Как проходит вечер?",
-            "Интересно с тобой, продолжай 😊",
-            "А ты чем сейчас занят?",
-        ]
-        return random.choice(fallback)
-    except Exception as exc:
-        logger.exception("Unexpected error in get_virtual_reply: %s", exc)
-        return partner_profile.get("opener", "Привет 🙂")
+        if text:
+            return text
+    except Exception:
+        pass
 
-
-# обратная совместимость
-async def get_ai_reply(user_message: str, mode: str = "chat", history: Optional[list[dict]] = None) -> str:
-    profile = {"name": "Собеседник", "age": 23, "gender": "ж", "opener": "Привет 🙂"}
-    return await get_virtual_reply(user_message=user_message, partner_profile=profile, history=history, lang="ru")
+    return _heuristic_reply(user_text, partner, history, lang)
