@@ -1,6 +1,5 @@
 # middlewares/throttle.py
-# ИСПРАВЛЕНО: увеличен rate до 0.5 сек чтобы не блокировать
-# быстрый ввод в FSM (например число дней подписки)
+# rate=0.2 — не блокирует быстрые нажатия кнопок листания анкет
 import time
 from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
@@ -8,9 +7,9 @@ from aiogram.types import Message
 
 
 class ThrottleMiddleware(BaseMiddleware):
-    """Антиспам — не более 2 сообщений в секунду на пользователя."""
+    """Антиспам — не более 5 сообщений в секунду на пользователя."""
 
-    def __init__(self, rate: float = 0.5):
+    def __init__(self, rate: float = 0.2):
         self._rate = rate
         self._last: dict[int, float] = {}
 
