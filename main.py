@@ -36,23 +36,36 @@ async def main() -> None:
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
 
-    # MemoryStorage — состояния сбрасываются при перезапуске.
-    # Это нормально: /start всегда восстанавливает состояние.
     storage = MemoryStorage()
     dp = Dispatcher(storage=storage)
 
-    # Throttle только на сообщения — НЕ на callback_query
-    # (callback_query уже защищены от дублей на уровне Telegram)
+    # Throttle на сообщения
     dp.message.middleware(ThrottleMiddleware())
 
     register_all_handlers(dp)
 
-    # Сбрасываем вебхук и пропускаем накопившиеся апдейты
+    # ИСПРАВЛЕНО: сначала удаляем вебхук явным запросом
+    # потом дополнительно чистим очередь через getUpdates с offset
     await bot.delete_webhook(drop_pending_updates=True)
+
+    # Дополнительная очистка накопившихся апдейтов
+    # Это решает проблему зацикливания /start после перезапуска
+    try:
+        updates = await bot.get_updates(offset=-1, limit=1, timeout=1)
+        if updates:
+            await bot.get_updates(offset=updates[-1].update_id + 1, limit=1, timeout=1)
+            logger.info("Очищено %d накопившихся апдейтов", len(updates))
+    except Exception as e:
+        logger.warning("Не удалось очистить апдейты: %s", e)
 
     logger.info("Бот запущен. Для остановки нажми Ctrl+C")
     try:
-        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        await dp.start_polling(
+            bot,
+            allowed_updates=dp.resolve_used_update_types(),
+            # ИСПРАВЛЕНО: drop_pending_updates в polling тоже
+            drop_pending_updates=True,
+        )
     finally:
         await bot.session.close()
         logger.info("Бот остановлен.")
