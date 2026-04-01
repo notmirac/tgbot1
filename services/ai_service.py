@@ -153,3 +153,13 @@ async def get_virtual_reply(
         pass
 
     return _heuristic_reply(user_text, partner, history, lang)
+
+
+async def get_ai_reply(
+    user_text: str,
+    mode: str = "chat",
+    history: list[dict[str, str]] | None = None,
+    lang: str = "ru",
+) -> str:
+    """Совместимость со старым chat.py."""
+    return await get_virtual_reply(user_text, partner=None, history=history, lang=lang)

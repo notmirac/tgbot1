@@ -100,3 +100,19 @@ def language_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="🇬🇧 English", callback_data="lang_en"),
         ]]
     )
+
+
+def profiles_browse_keyboard(index: int, total: int, lang: str = "ru") -> InlineKeyboardMarkup:
+    prev_index = max(index - 1, 0)
+    next_index = min(index + 1, max(total - 1, 0))
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="◀️", callback_data=f"profile_browse:{prev_index}"),
+                InlineKeyboardButton(text=f"{index + 1} / {total}", callback_data="profile_browse_noop"),
+                InlineKeyboardButton(text="▶️", callback_data=f"profile_browse:{next_index}"),
+            ],
+            [InlineKeyboardButton(text="✉️ Написать" if normalize_lang(lang) == "ru" else "✉️ Message", callback_data=f"profile_write:{index}")],
+            [InlineKeyboardButton(text="❌ Закрыть" if normalize_lang(lang) == "ru" else "❌ Close", callback_data="profile_close")],
+        ]
+    )

@@ -1,4 +1,4 @@
-﻿from aiogram import Dispatcher
+from aiogram import Dispatcher
 from . import chat, chat_18, photos_18, start, payments, profile, admin
 
 
