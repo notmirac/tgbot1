@@ -103,6 +103,7 @@ def language_keyboard() -> InlineKeyboardMarkup:
 
 
 def profiles_browse_keyboard(index: int, total: int, lang: str = "ru") -> InlineKeyboardMarkup:
+<<<<<<< HEAD
     prev_index = max(index - 1, 0)
     next_index = min(index + 1, max(total - 1, 0))
     return InlineKeyboardMarkup(
@@ -114,5 +115,22 @@ def profiles_browse_keyboard(index: int, total: int, lang: str = "ru") -> Inline
             ],
             [InlineKeyboardButton(text="✉️ Написать" if normalize_lang(lang) == "ru" else "✉️ Message", callback_data=f"profile_write:{index}")],
             [InlineKeyboardButton(text="❌ Закрыть" if normalize_lang(lang) == "ru" else "❌ Close", callback_data="profile_close")],
+=======
+    prev_idx = max(0, index - 1)
+    next_idx = min(total - 1, index + 1)
+
+    buy_text = "💳 Купить доступ" if lang == "ru" else "💳 Buy access"
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="⬅️", callback_data=f"profile_prev:{prev_idx}"),
+                InlineKeyboardButton(text=f"{index + 1}/{total}", callback_data="profile_noop"),
+                InlineKeyboardButton(text="➡️", callback_data=f"profile_next:{next_idx}"),
+            ],
+            [
+                InlineKeyboardButton(text=buy_text, callback_data="buy_access"),
+            ],
+>>>>>>> 4716f96 (add env and fixes)
         ]
     )
